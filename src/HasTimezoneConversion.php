@@ -36,28 +36,90 @@ trait HasTimezoneConversion
     }
     
     /**
-     * Dynamically create timezone conversion accessors (UTC -> User timezone)
-     * ONLY for display - NO automatic saving conversion
+     * Get the raw datetime value from the database without timezone conversion
+     * 
+     * @param string $attribute
+     * @return \Carbon\Carbon|mixed|null
      */
-    public function getAttribute($key)
+    public function getRawAttribute($attribute)
     {
-        $value = parent::getAttribute($key);
+        $value = parent::getAttribute($attribute);
         
-        if (in_array($key, $this->getTimezoneConvertedAttributes()) && $value instanceof Carbon) {
-            return $this->convertToUserTimezone($key, $value);
+        if (!$value) {
+            return null;
+        }
+        
+        // If it's a timezoned attribute, ensure it's in database timezone
+        if (in_array($attribute, $this->getTimezonedAttributes())) {
+            $datetime = $value instanceof Carbon
+                ? $value
+                : Carbon::parse($value, config('timezoned.database_timezone'));
+            return $datetime->setTimezone(config('timezoned.database_timezone'));
         }
         
         return $value;
     }
+    
+    /**
+     * Convert model datetime attributes FROM database timezone TO user timezone
+     * whenever they are accessed.
+     *
+     * This ensures that all listed attributes in getTimezonedAttributes()
+     * are always returned in the user's timezone, regardless of whether they were
+     * stored as strings or Carbon instances.
+     */
+    public function getAttribute($key)
+    {
+        $value = parent::getAttribute($key);
 
+        if (!in_array($key, $this->getTimezonedAttributes())) {
+            return $value;
+        }
+
+        if (!$value) {
+            return null;
+        }
+
+        // Normalize into a Carbon instance
+        $datetime = $value instanceof Carbon
+            ? $value
+            : Carbon::parse($value, config('timezoned.database_timezone'));
+
+        return $this->convertToUserTimezone($key, $datetime);
+    }
+
+
+
+    /**
+     * Convert model datetime attributes FROM user timezone TO database timezone
+     * whenever they are assigned.
+     *
+     * This ensures that user input (strings or Carbon instances) is always
+     * stored in a consistent, database-defined timezone.
+     */
     public function setAttribute($key, $value)
     {
-        $userTimezone = call_user_func(config('timezoned.timezone_resolver'), $this);
-        if (in_array($key, $this->getTimezoneConvertedAttributes()) && $value instanceof Carbon) {
-            $newDate = Carbon::parse($value)->shiftTimezone($userTimezone)->setTimezone(config('timezoned.database_timezone'));
-            return parent::setAttribute($key, $newDate);
+        if (!in_array($key, $this->getTimezonedAttributes())) {
+            return parent::setAttribute($key, $value);
         }
-        
-        return parent::setAttribute($key, $value);
+
+        if (!$value) {
+            return parent::setAttribute($key, null);
+        }
+
+        $userTimezone = call_user_func(config('timezoned.timezone_resolver'), $this);
+        $dbTimezone = config('timezoned.database_timezone');
+
+        // Normalize into a Carbon instance
+        $datetime = $value instanceof Carbon
+            ? $value
+            : Carbon::parse($value, $userTimezone);
+
+        // Convert from user timezone → DB timezone
+        $normalized = $datetime
+            ->shiftTimezone($userTimezone)
+            ->setTimezone($dbTimezone);
+
+        return parent::setAttribute($key, $normalized);
     }
 }

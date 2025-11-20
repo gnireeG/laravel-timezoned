@@ -23,10 +23,11 @@ return [
     | Database Timezone
     |--------------------------------------------------------------------------
     |
-    | The timezone that your database stores dates in.
+    | The timezone that your database stores dates in. This should match
+    | your Laravel app timezone configuration.
     |
     */
 
-    'database_timezone' => 'UTC',
+    'database_timezone' => config('app.timezone', 'UTC'),
 
 ];
