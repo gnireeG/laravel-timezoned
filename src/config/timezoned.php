@@ -19,15 +19,18 @@ return [
         return auth()->user()?->timezone ?? 'UTC';
     },
 
-    /*|--------------------------------------------------------------------------
+    /*
+    |--------------------------------------------------------------------------
     | Database Timezone
     |--------------------------------------------------------------------------
     |
     | The timezone that your database stores dates in. This should match
     | your Laravel app timezone configuration.
     |
+    | Set to null to automatically use your app's timezone (config('app.timezone')).
+    |
     */
 
-    'database_timezone' => config('app.timezone', 'UTC'),
+    'database_timezone' => null,
 
 ];
